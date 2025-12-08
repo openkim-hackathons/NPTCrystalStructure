@@ -18,7 +18,7 @@ if __name__ == '__main__':
     model_name = args.model
     stoich = args.stoichiometry
     prot = args.prototype
-    temperature_K = 293.15 if args.temperature is None else args.temperature
+    temperature_K = 293.15 if args.temperature is None else float(args.temperature)
 
     # Run test
     subprocess.run(f"kim-api-collections-management install user {model_name}", shell=True)
@@ -30,8 +30,8 @@ if __name__ == '__main__':
     for i, queried_structure in enumerate(list_of_queried_structures):
         try:
             test_driver(queried_structure, temperature_K=temperature_K,
-                        repeat=(4, 4, 4),
-                        lammps_command="mpirun -np 4 lmp_mpi")
+                        repeat=(0, 0, 0),
+                        lammps_command="mpirun -np 20 --bind-to none lmp_mpi")
         except Exception as e:
             print(f"Got exception {repr(e)}")
     test_driver.write_property_instances_to_file()
