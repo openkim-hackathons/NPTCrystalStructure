@@ -11,12 +11,14 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--stoichiometry', help='Stoichiometry of structure to test', nargs='+',
                         required=True)
     parser.add_argument('-p', '--prototype', help='Prototype ASE label', required=True)
+    parser.add_argument('-t', '--temperature', help='Temperature in K', required=False)
     args = parser.parse_args()
 
     # Get arguments
     model_name = args.model
     stoich = args.stoichiometry
     prot = args.prototype
+    temperature_K = 293.15 if args.temperature is None else args.temperature
 
     # Run test
     subprocess.run(f"kim-api-collections-management install user {model_name}", shell=True)
@@ -27,7 +29,7 @@ if __name__ == '__main__':
 
     for i, queried_structure in enumerate(list_of_queried_structures):
         try:
-            test_driver(queried_structure, temperature_K=293.15,
+            test_driver(queried_structure, temperature_K=temperature_K,
                         repeat=(4, 4, 4),
                         lammps_command="mpirun -np 4 lmp_mpi")
         except Exception as e:

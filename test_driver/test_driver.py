@@ -12,7 +12,7 @@ from .helper_functions import get_cell_from_averaged_lammps_dump, get_positions_
 class TestDriver(SingleCrystalTestDriver):
     def _calculate(self, timestep_ps: float = 0.001, number_sampling_timesteps: int = 100, repeat: Sequence[int] = (0, 0, 0),
                    lammps_command = "lmp", msd_threshold_angstrom_squared_per_sampling_timesteps: float = 0.1,
-                   number_msd_timesteps: int = 5000, random_seed: int = 1, **kwargs) -> None:
+                   number_msd_timesteps: int = 10000, random_seed: int = 1, **kwargs) -> None:
         """
         Compute crystal structure at constant pressure and temperature (NPT) with a Lammps molecular-dynamics simulation.
 
