@@ -9,7 +9,7 @@ import kim_convergence as cr
 from accuracies import RELATIVE_ACCURACY, ABSOLUTE_ACCURACY
 
 # Initial run length
-INITIAL_RUN_LENGTH: int = 1000
+INITIAL_RUN_LENGTH: int = 10000
 # Run length increasing factor
 RUN_LENGTH_FACTOR: float = 1.
 # The maximum run length represents a cost constraint.
