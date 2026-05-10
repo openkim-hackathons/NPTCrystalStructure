@@ -6,12 +6,14 @@ from typing import Iterable, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+import scipy.optimize
 
 
-def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timestep_ps: float,
-               number_sampling_timesteps: int, species: List[str],
+def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pressure_bar: float, timestep_ps: float,
+               thermo_sampling_period: int, species: List[str],
                msd_threshold_angstrom_squared_per_sampling_timesteps: float, number_msd_timesteps: int,
-               lammps_command: str, random_seed: int) -> Tuple[str, str, str, str]:
+               rlc_run_length: int, rlc_n_every: int, output_dir: str, equilibration_plots: bool, lammps_command: str,
+               random_seed: int) -> Tuple[str, str, str, str, str]:
     """
     Run LAMMPS NPT simulation with the given parameters.
 
@@ -21,9 +23,14 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
     It then computes the average atomic positions and cell parameters during the molecular-dynamics simulation, only
     considering data after equilibration.
 
+    The given temperature_index is used to name the output files uniquely for each temperature in a temperature sweep.
+
     :param modelname:
         Name of the OpenKIM interatomic model.
     :type modelname: str
+    :param temperature_index:
+        Index of the temperature in the temperature sweep.
+    :type temperature_index: int
     :param temperature_K:
         Target temperature in Kelvin.
     :type temperature_K: float
@@ -33,9 +40,9 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
     :param timestep_ps:
         Timestep in picoseconds.
     :type timestep_ps: float
-    :param number_sampling_timesteps:
+    :param thermo_sampling_period:
         Number of timesteps for sampling thermodynamic quantities.
-    :type number_sampling_timesteps: int
+    :type thermo_sampling_period: int
     :param species:
         List of chemical species in the system.
     :type species: List[str]
@@ -47,6 +54,19 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
         Before the mean-squared displacement is monitored, the system will be equilibrated for the same number of
         timesteps.
     :type number_msd_timesteps: int
+    :param rlc_run_length:
+        Number of timesteps after which kim-convergence will check for convergence.
+        This is also the timestep interval for generated trajectories.
+    :type rlc_run_length: int
+    :param rlc_n_every:
+        Number of timesteps between storage of values for the run-length control in kim-convergence.
+    :type rlc_n_every: int
+    :param output_dir:
+        Directory to store the output files.
+    :type output_dir: str
+    :param equilibration_plots:
+        Whether to plot the equilibration plots.
+    :type equilibration_plots: bool
     :param lammps_command:
         Command to run LAMMPS (e.g., "mpirun -np 4 lmp_mpi" or "lmp").
     :type lammps_command: str
@@ -55,15 +75,17 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
     :type random_seed: int
 
     :return:
-        A tuple containing paths to the LAMMPS log file, restart file, full average position file, and full average cell
-        file.
-    :rtype: Tuple[str, str, str, str]
+        A tuple containing paths to the LAMMPS log file, restart file, full average position file, full average cell
+        file, and melted crystal dump file (only exists if crystal melted).
+    :rtype: Tuple[str, str, str, str, str]
     """
     pdamp = timestep_ps * 100.0
     tdamp = timestep_ps * 1000.0
 
-    log_filename = "output/lammps.log"
-    restart_filename = "output/final_configuration.restart"
+    # Lammps will be run directly in output_dir so all paths are with respect to that directory.
+    log_filename = f"lammps_temperature_{temperature_index}.log"
+    restart_filename = f"final_configuration_temperature_{temperature_index}.restart"
+    melted_crystal_filename = f"melted_crystal_temperature_{temperature_index}.dump"
     variables = {
         "modelname": modelname,
         "temperature": temperature_K,
@@ -72,43 +94,48 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
         "pressure": pressure_bar,
         "pressure_damping": pdamp,
         "timestep": timestep_ps,
-        "number_sampling_timesteps": number_sampling_timesteps,
+        "thermo_sampling_period": thermo_sampling_period,
         "species": " ".join(species),
-        "average_position_filename": "output/average_position.dump.*",
-        "average_cell_filename": "output/average_cell.dump",
+        "zero_temperature_crystal_filename": f"zero_temperature_crystal.lmp",
+        "average_position_filename": f"average_position_temperature_{temperature_index}.dump.*",
+        "average_cell_filename": f"average_cell_temperature_{temperature_index}.dump",
         "write_restart_filename": restart_filename,
-        "trajectory_filename": "output/trajectory.lammpstrj",
-        "msd_trajectory_filename": "output/msd_trajectory.lammpstrj",
+        "trajectory_filename": f"trajectory_{temperature_index}.lammpstrj",
+        "msd_trajectory_filename": f"msd_trajectory_{temperature_index}.lammpstrj",
         "msd_threshold": msd_threshold_angstrom_squared_per_sampling_timesteps,
         "msd_timesteps": number_msd_timesteps,
-	    "melted_crystal_output": "output/melted_crystal.dump"
+        "rlc_run_length": rlc_run_length,
+        "rlc_n_every": rlc_n_every,
+        "melted_crystal_output": melted_crystal_filename
     }
 
     command = (
             f"{lammps_command} "
             + " ".join(f"-var {key} '{item}'" for key, item in variables.items())
             + f" -log {log_filename}"
-            + " -in npt.lammps")
+            + f" -in npt.lammps")
 
-    subprocess.run(command, check=True, shell=True)
+    subprocess.run(command, check=True, shell=True, cwd=output_dir)
 
-    plot_property_from_lammps_log(log_filename, ("v_vol_metal", "v_temp_metal", "v_enthalpy_metal"))
+    if equilibration_plots:
+        plot_property_from_lammps_log(f"{output_dir}/{log_filename}",
+                                      ("v_vol_metal", "v_temp_metal", "v_enthalpy_metal"))
 
-    # 10000 offset from MSD detection during which kim_convergence was not used.
-    equilibration_time = extract_equilibration_step_from_logfile(log_filename) + 10000
-    # Round to next multiple of 10000.
-    equilibration_time = int(ceil(equilibration_time / 10000.0)) * 10000
+    equilibration_time = extract_equilibration_step_from_logfile(f"{output_dir}/{log_filename}")
+    # Round to next multiple of rlc_run_length.
+    equilibration_time = int(ceil(equilibration_time / float(rlc_run_length))) * rlc_run_length
 
-    full_average_position_file = "output/average_position.dump.full"
-    compute_average_positions_from_lammps_dump("output",
-                                               "average_position.dump",
+    full_average_position_file = f"{output_dir}/average_position_temperature_{temperature_index}.dump.full"
+    compute_average_positions_from_lammps_dump(output_dir,
+                                               f"average_position_temperature_{temperature_index}.dump",
                                                full_average_position_file, equilibration_time)
 
-    full_average_cell_file = "output/average_cell.dump.full"
-    compute_average_cell_from_lammps_dump("output/average_cell.dump",
+    full_average_cell_file = f"{output_dir}/average_cell_temperature_{temperature_index}.dump.full"
+    compute_average_cell_from_lammps_dump(f"{output_dir}/average_cell_temperature_{temperature_index}.dump",
                                           full_average_cell_file, equilibration_time)
 
-    return log_filename, restart_filename, full_average_position_file, full_average_cell_file
+    return (f"{output_dir}/{log_filename}", f"{output_dir}/{restart_filename}", full_average_position_file,
+            full_average_cell_file, f"{output_dir}/{melted_crystal_filename}")
 
 
 def plot_property_from_lammps_log(in_file_path: str, property_names: Iterable[str]) -> None:
