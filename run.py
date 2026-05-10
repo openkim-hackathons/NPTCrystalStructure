@@ -1,14 +1,13 @@
 from test_driver.test_driver import TestDriver
 from ase.build import bulk
 
-atoms = bulk("Au")
-td=TestDriver("Sim_LAMMPS_ADP_StarikovGordeevLysogorskiy_2020_SiAuAl__SM_113843830602_000")
+atoms = bulk("Al")
+td=TestDriver("EAM_Dynamo_ErcolessiAdams_1994_Al__MO_123629422045_006")
 print(td(
         atoms,
-        temperature_K= 293.15,
-        repeat= (3, 3, 3),
+        temperature_K=300,
+        target_size=500,
         lammps_command= "lmp",
-        max_workers= 3,
 ))
 
 

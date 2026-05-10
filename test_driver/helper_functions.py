@@ -6,10 +6,9 @@ from typing import Iterable, List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-import scipy.optimize
 
 
-def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pressure_bar: float, timestep_ps: float,
+def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timestep_ps: float,
                thermo_sampling_period: int, species: List[str],
                msd_threshold_angstrom_squared_per_sampling_timesteps: float, number_msd_timesteps: int,
                rlc_run_length: int, rlc_n_every: int, output_dir: str, equilibration_plots: bool, lammps_command: str,
@@ -23,14 +22,9 @@ def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pre
     It then computes the average atomic positions and cell parameters during the molecular-dynamics simulation, only
     considering data after equilibration.
 
-    The given temperature_index is used to name the output files uniquely for each temperature in a temperature sweep.
-
     :param modelname:
         Name of the OpenKIM interatomic model.
     :type modelname: str
-    :param temperature_index:
-        Index of the temperature in the temperature sweep.
-    :type temperature_index: int
     :param temperature_K:
         Target temperature in Kelvin.
     :type temperature_K: float
@@ -83,9 +77,11 @@ def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pre
     tdamp = timestep_ps * 1000.0
 
     # Lammps will be run directly in output_dir so all paths are with respect to that directory.
-    log_filename = f"lammps_temperature_{temperature_index}.log"
-    restart_filename = f"final_configuration_temperature_{temperature_index}.restart"
-    melted_crystal_filename = f"melted_crystal_temperature_{temperature_index}.dump"
+    log_filename = "lammps_temperature.log"
+    restart_filename = "final_configuration_temperature.restart"
+    melted_crystal_filename = "melted_crystal_temperature.dump"
+    average_position_filename = "average_position_temperature.dump"
+    average_cell_filename = "average_cell_temperature.dump"
     variables = {
         "modelname": modelname,
         "temperature": temperature_K,
@@ -96,12 +92,12 @@ def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pre
         "timestep": timestep_ps,
         "thermo_sampling_period": thermo_sampling_period,
         "species": " ".join(species),
-        "zero_temperature_crystal_filename": f"zero_temperature_crystal.lmp",
-        "average_position_filename": f"average_position_temperature_{temperature_index}.dump.*",
-        "average_cell_filename": f"average_cell_temperature_{temperature_index}.dump",
+        "zero_temperature_crystal_filename": "zero_temperature_crystal.lmp",
+        "average_position_filename": f"{average_position_filename}.*",
+        "average_cell_filename": average_cell_filename,
         "write_restart_filename": restart_filename,
-        "trajectory_filename": f"trajectory_{temperature_index}.lammpstrj",
-        "msd_trajectory_filename": f"msd_trajectory_{temperature_index}.lammpstrj",
+        "trajectory_filename": "trajectory.lammpstrj",
+        "msd_trajectory_filename": "msd_trajectory.lammpstrj",
         "msd_threshold": msd_threshold_angstrom_squared_per_sampling_timesteps,
         "msd_timesteps": number_msd_timesteps,
         "rlc_run_length": rlc_run_length,
@@ -125,13 +121,13 @@ def run_lammps(modelname: str, temperature_index: int, temperature_K: float, pre
     # Round to next multiple of rlc_run_length.
     equilibration_time = int(ceil(equilibration_time / float(rlc_run_length))) * rlc_run_length
 
-    full_average_position_file = f"{output_dir}/average_position_temperature_{temperature_index}.dump.full"
+    full_average_position_file = f"{output_dir}/{average_position_filename}.full"
     compute_average_positions_from_lammps_dump(output_dir,
-                                               f"average_position_temperature_{temperature_index}.dump",
+                                               average_position_filename,
                                                full_average_position_file, equilibration_time)
 
-    full_average_cell_file = f"{output_dir}/average_cell_temperature_{temperature_index}.dump.full"
-    compute_average_cell_from_lammps_dump(f"{output_dir}/average_cell_temperature_{temperature_index}.dump",
+    full_average_cell_file = f"{output_dir}/{average_cell_filename}.full"
+    compute_average_cell_from_lammps_dump(f"{output_dir}/{average_cell_filename}",
                                           full_average_cell_file, equilibration_time)
 
     return (f"{output_dir}/{log_filename}", f"{output_dir}/{restart_filename}", full_average_position_file,

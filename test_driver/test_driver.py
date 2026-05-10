@@ -1,72 +1,42 @@
 import os
-import random
 import shutil
 from typing import Optional, Sequence
 from ase.calculators.lammps import convert, Prism
-import numpy as np
 from kim_tools import KIMTestDriverError
 from kim_tools.symmetry_util.core import reduce_and_avg, PeriodExtensionException
 from kim_tools.test_driver import SingleCrystalTestDriver
+from .structure_utils import compute_supercell_for_target_size
 from .helper_functions import get_cell_from_averaged_lammps_dump, get_positions_from_averaged_lammps_dump, run_lammps
 
 
 class TestDriver(SingleCrystalTestDriver):
-    def _calculate(self, temperature_step_fraction: float = 0.01, number_symmetric_temperature_steps: int = 1,
+    def _calculate(self,
                    timestep_ps: float = 0.001, thermo_sampling_period: int = 100, target_size: int = 10000,
-                   repeat: Optional[Sequence[int]] = None, max_workers: Optional[int] = None,
+                   repeat: Optional[Sequence[int]] = None,
                    lammps_command: str = "lmp", msd_threshold_angstrom_squared_per_sampling_timesteps: float = 0.1,
-                   number_msd_timesteps: int = 20000, random_seeds: Optional[Sequence[int]] = (1, 2, 3),
+                   number_msd_timesteps: int = 20000, random_seed: int = 1,
                    rlc_n_every: int = 10, rlc_run_length: int = 10000, rlc_min_samples: int = 100,
                    output_dir: str = "output", equilibration_plots: bool = True, **kwargs) -> None:
         """
-        Estimate constant-pressure heat capacity and linear thermal expansion tensor with finite-difference numerical
-        derivatives.
+        Compute crystal structure at constant pressure and temperature (NPT) with a Lammps molecular-dynamics simulation.
 
-        Section 3.2 in https://pubs.acs.org/doi/10.1021/jp909762j argues that the centered finite-difference approach
-        is more accurate than fluctuation-based approaches for computing heat capacities from molecular-dynamics
-        simulations.
+        This test driver repeats the unit cell to build a supercell and then runs a molecular-dynamics simulation in the
+        NPT ensemble using Lammps.
 
-        The finite-difference approach requires to run at least three molecular-dynamics simulations with a fixed number
-        of atoms N at constant pressure (P) and at different constant temperatures T (NPT ensemble), one at the target
-        temperature at which the heat capacity and thermal expansion tensor are to be estimated, one at a slightly lower
-        temperature, and one at a slightly higher temperature. It is possible to add more temperature points
-        symmetrically around the target temperature for higher-order finite-difference schemes.
-
-        This test driver repeats the unit cell of the zero-temperature crystal structure to build a supercell and then
-        runs molecular-dynamics simulations in the NPT ensemble using Lammps.
-
-        This test driver uses kim_convergence to detect equilibrated molecular-dynamics simulations. It checks for the
+        This test driver uses kim_convergence to detect an equilibrated molecular-dynamics simulation. It checks
         convergence of the volume, temperature, enthalpy and cell shape parameters every rlc_run_length timesteps.
 
-        After the molecular-dynamics simulations, the symmetry of the average structures during the equilbrated parts of
-        the runs are checked to ensure that they did not change in comparison to the initial structure. Also, it is
-        ensured that replicated atoms in replicated unit atoms are not too far away from the average atomic positions.
+        After the molecular-dynamics simulation, the symmetry of the structure is checked to ensure that it did not
+        change.
 
-        The crystals might melt or vaporize during the simulations. In that case, kim-convergence would only detect
-        equilibration after unnecessarily long simulations. Therefore, this test driver initially check for melting or
-        vaporization during short initial simulations. During these initial runs, the mean-squared displacement (MSD) of
-        atoms during the simulations is monitored. If the MSD exceeds a given threshold value, an error is raised.
+        The crystal might melt or vaporize during the simulation. In that case, kim_convergence would only detect
+        equilibration after an unnecessarily long simulation. Therefore, we initially check for melting or vaporization
+        during a short initial simulation. During this run, we monitor the mean-squared displacement (MSD) of atoms
+        during the simulation. If the MSD exceeds a given threshold value
+        (msd_threshold_angstrom_squared_per_sampling_timesteps), an error is raised.
 
         All output files are written to the given output directory.
 
-        :param temperature_step_fraction:
-            Fraction of the target temperature that is used as temperature step for the finite-difference scheme.
-            For example, if the target temperature is 300 K and the temperature_step_fraction is 0.1, the temperature
-            difference between the different NPT simulations will be 30 K.
-            Should be bigger than zero and smaller than one divided by number_symmetric_temperature_steps (to avoid
-            simulations at negative temperatures).
-            Default is 0.01 (1% of the target temperature).
-            Should be bigger than zero and smaller than one.
-        :type temperature_step_fraction: float
-        :param number_symmetric_temperature_steps:
-            Number of symmetric temperature steps around the target temperature to use for the finite-difference
-            scheme.
-            For example, if number_symmetric_temperature_steps is 2, five NPT simulations will be run at temperatures
-            T - 2*delta_T, T - delta_T, T, T + delta_T, T + 2*delta_T, where delta_T is determined by
-            temperature_step_fraction * T.
-            Default is 1.
-            Should be bigger than zero.
-        :type number_symmetric_temperature_steps: int
         :param timestep_ps:
             Time step in picoseconds.
             Default is 0.001 ps (1 fs).
@@ -92,13 +62,6 @@ class TestDriver(SingleCrystalTestDriver):
             Default is None.
             If not None, all entries have to be bigger than zero.
         :type repeat: Sequence[int]
-        :param max_workers:
-            Maximum number of parallel workers to use for running Lammps simulations at different temperatures.
-            If None is given, this will be set to 1.
-            This is independent of the number of processors used by each Lammps simulation that can be specified in the
-            lammps command itself.
-            Default is None.
-        :type max_workers: Optional[int]
         :param lammps_command:
             Command to run Lammps.
             Default is "lmp".
@@ -115,14 +78,11 @@ class TestDriver(SingleCrystalTestDriver):
             timesteps.
             Default is 20000 timesteps.
             Should be bigger than zero and a multiple of thermo_sampling_period.
-        :param random_seeds:
-            Random seeds for the Lammps simulations.
-            This has to be a sequence of 2 * number_symmetric_temperature_steps + 1 integers for the different
-            temperatures being simulated.
-            If None is given, random seeds will be sampled.
-            Default is (1, 2, 3).
-            Each seed should be bigger than zero.
-        :type random_seeds: Optional[Sequence[int]]
+        :param random_seed:
+            Random seed for Lammps simulation.
+            Default is 1.
+            Should be bigger than zero.
+        :type random_seed: int
         :param rlc_n_every:
             Number of timesteps between storage of values for the run-length control in kim-convergence.
             Default is 10.
@@ -194,12 +154,6 @@ class TestDriver(SingleCrystalTestDriver):
 
             if not all(r > 0 for r in repeat):
                 raise ValueError("All number of repeats must be bigger than zero.")
-
-        if max_workers is not None:
-            if not max_workers > 0:
-                raise ValueError("Maximum number of workers has to be bigger than zero.")
-        else:
-            max_workers = 1
         
         if not msd_threshold_angstrom_squared_per_sampling_timesteps > 0.0:
             raise ValueError("The mean-squared displacement threshold has to be bigger than zero.")
@@ -212,15 +166,8 @@ class TestDriver(SingleCrystalTestDriver):
             raise ValueError("The number of timesteps to monitor the mean-squared displacement has to be a multiple of "
                              "the thermo sampling period.")
 
-        if random_seeds is not None:
-            if len(random_seeds) != 2 * number_symmetric_temperature_steps + 1:
-                raise ValueError("If random seeds are given, their number has to match the number of temperatures "
-                                 "being simulated.")
-            if not all(rs > 0 for rs in random_seeds):
-                raise ValueError("All random seeds must be bigger than zero.")
-        else:
-            # Get random 31-bit unsigned integers.
-            random_seeds = [random.getrandbits(31) for _ in range(2 * number_symmetric_temperature_steps + 1)]
+        if not random_seed > 0:
+            raise ValueError("The random seed has to be bigger than zero.")
 
         if not rlc_n_every > 0:
             raise ValueError("The number of timesteps between storage of values for run-length control has to be "
@@ -241,7 +188,7 @@ class TestDriver(SingleCrystalTestDriver):
         pressure_bar = -cell_cauchy_stress_bar[0]
 
         # Create atoms object that will contain the supercell.
-        atoms_new = original_atoms.copy()
+        atoms_new = self._get_atoms()
 
         # This is how ASE obtains the species that are written to the initial configuration.
         # These species are passed to kim interactions.
@@ -256,13 +203,6 @@ class TestDriver(SingleCrystalTestDriver):
             # Use cutoff-based expansion with target size constraint
             # (good for non-cubic cells, ensures natoms >= target_size)
             atoms_new, repeat = compute_supercell_for_target_size(atoms_new.copy(), target_size)
-
-        # Get temperatures that should be simulated.
-        temperature_step = temperature_step_fraction * temperature_K
-        temperatures = [temperature_K + i * temperature_step
-                        for i in range(-number_symmetric_temperature_steps, number_symmetric_temperature_steps + 1)]
-        assert len(temperatures) == 2 * number_symmetric_temperature_steps + 1
-        assert all(t > 0.0 for t in temperatures)
 
         # Make sure output directory for all data files exists and copy over necessary files.
         if not os.path.exists(output_dir):
@@ -305,21 +245,35 @@ INITIAL_RUN_LENGTH: int = {rlc_run_length}
 MINIMUM_NUMBER_OF_INDEPENDENT_SAMPLES: Optional[int] = {rlc_min_samples}""", file=file)
 
         # Write lammps file.
-        structure_file = "output/zero_temperature_crystal.lmp"
+        structure_file = f"{output_dir}/zero_temperature_crystal.lmp"
         atom_style = self._get_supported_lammps_atom_style()
         atoms_new.write(structure_file, format="lammps-data", masses=True, units="metal", atom_style=atom_style)
 
         # Run single Lammps simulation.
-        log_filename, restart_filename, average_position_filename, average_cell_filename = run_lammps(
-            self.kim_model_name, temperature_K, pressure_bar, timestep_ps, number_sampling_timesteps, species,
-            msd_threshold_angstrom_squared_per_sampling_timesteps, number_msd_timesteps,
-            lammps_command=lammps_command, random_seed=random_seed)
+        log_filename, restart_filename, average_position_filename, average_cell_filename, melted_crystal_filename = run_lammps(
+            modelname=self.kim_model_name,
+            temperature_K=temperature_K,
+            pressure_bar=pressure_bar,
+            timestep_ps=timestep_ps,
+            thermo_sampling_period=thermo_sampling_period,
+            species=species,
+            msd_threshold_angstrom_squared_per_sampling_timesteps=msd_threshold_angstrom_squared_per_sampling_timesteps,
+            number_msd_timesteps=number_msd_timesteps,
+            rlc_run_length=rlc_run_length,
+            rlc_n_every=rlc_n_every,
+            output_dir=output_dir,
+            equilibration_plots=equilibration_plots,
+            lammps_command=lammps_command,
+            random_seed=random_seed,
+            )
 
         # Check that crystal did not melt or vaporize.
         with open(log_filename, "r") as f:
             for line in f:
                 if line.startswith("Crystal melted or vaporized"):
-                    raise KIMTestDriverError(f"Crystal melted or vaporized during simulation at temperature {temperature_K} K.")
+                    assert os.path.exists(melted_crystal_filename)
+                    raise KIMTestDriverError(f"Crystal melted or vaporized during simulation at temperature {temperature_K} K.")                    
+        assert not os.path.exists(melted_crystal_filename)
 
         # Process results and check that symmetry is unchanged after simulation.
         atoms_new.set_cell(get_cell_from_averaged_lammps_dump(average_cell_filename))
