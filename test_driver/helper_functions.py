@@ -77,11 +77,11 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
     tdamp = timestep_ps * 1000.0
 
     # Lammps will be run directly in output_dir so all paths are with respect to that directory.
-    log_filename = "lammps_temperature.log"
-    restart_filename = "final_configuration_temperature.restart"
-    melted_crystal_filename = "melted_crystal_temperature.dump"
-    average_position_filename = "average_position_temperature.dump"
-    average_cell_filename = "average_cell_temperature.dump"
+    log_filename = "lammps.log"
+    restart_filename = "final_configuration.restart"
+    melted_crystal_filename = "melted_crystal.dump"
+    average_position_filename = "average_position.dump"
+    average_cell_filename = "average_cell.dump"
     variables = {
         "modelname": modelname,
         "temperature": temperature_K,
