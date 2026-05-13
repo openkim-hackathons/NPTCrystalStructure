@@ -10,13 +10,22 @@ from .helper_functions import get_cell_from_averaged_lammps_dump, get_positions_
 
 
 class TestDriver(SingleCrystalTestDriver):
-    def _calculate(self,
-                   timestep_ps: float = 0.001, thermo_sampling_period: int = 100, target_size: int = 10000,
-                   repeat: Optional[Sequence[int]] = None,
-                   lammps_command: str = "lmp", msd_threshold_angstrom_squared_per_sampling_timesteps: float = 0.1,
-                   number_msd_timesteps: int = 20000, random_seed: int = 1,
-                   rlc_n_every: int = 10, rlc_run_length: int = 10000, rlc_min_samples: int = 100,
-                   output_dir: str = "output", equilibration_plots: bool = True, **kwargs) -> None:
+    def _calculate(
+        self,
+        timestep_ps: float = 0.001,
+        target_size: int = 10000,
+        repeat: Optional[Sequence[int]] = None,
+        lammps_command: str = "lmp",
+        msd_threshold_angstrom_squared_per_sampling_timesteps: float = 0.1,
+        number_msd_timesteps: int = 20000,
+        thermo_sampling_period: int = 100,
+        random_seed: int = 1,
+        rlc_n_every: int = 10,
+        rlc_run_length: int = 10000,
+        rlc_min_samples: int = 100,
+        output_dir: str = "output",
+        equilibration_plots: bool = True,
+        **kwargs) -> None:
         """
         Compute crystal structure at constant pressure and temperature (NPT) with a Lammps molecular-dynamics simulation.
 
@@ -42,11 +51,6 @@ class TestDriver(SingleCrystalTestDriver):
             Default is 0.001 ps (1 fs).
             Should be bigger than zero.
         :type timestep_ps: float
-        :param thermo_sampling_period:
-            Sample thermodynamic variables every thermo_sampling_period timesteps in Lammps.
-            Default is 100 timesteps.
-            Should be bigger than zero.
-        :type thermo_sampling_period: int
         :param target_size:
             Target number of atoms in the supercell to build by repeating the unit cell. Uses cutoff-based expansion
             with target size constraint (good for non-cubic cells). The algorithm starts with an 20Å cutoff radius and
@@ -78,6 +82,12 @@ class TestDriver(SingleCrystalTestDriver):
             timesteps.
             Default is 20000 timesteps.
             Should be bigger than zero and a multiple of thermo_sampling_period.
+        :type number_msd_timesteps: int
+        :param thermo_sampling_period:
+            Sample thermodynamic variables every thermo_sampling_period timesteps in Lammps.
+            Default is 100 timesteps.
+            Should be bigger than zero.
+        :type thermo_sampling_period: int
         :param random_seed:
             Random seed for Lammps simulation.
             Default is 1.
