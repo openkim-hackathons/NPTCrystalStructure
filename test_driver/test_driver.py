@@ -138,25 +138,11 @@ class TestDriver(SingleCrystalTestDriver):
         if not temperature_K > 0.0:
             raise ValueError("Temperature has to be larger than zero.")
 
-        if not len(cell_cauchy_stress_bar) == 6:
-            raise ValueError("Specify all six (x, y, z, xy, xz, yz) entries of the cauchy stress tensor.")
-
-        if not (cell_cauchy_stress_bar[0] == cell_cauchy_stress_bar[1] == cell_cauchy_stress_bar[2]):
-            raise ValueError("The diagonal entries of the stress tensor have to be equal so that a hydrostatic "
-                             "pressure is used.")
-
-        if not (cell_cauchy_stress_bar[3] == cell_cauchy_stress_bar[4] == cell_cauchy_stress_bar[5] == 0.0):
-            raise ValueError("The off-diagonal entries of the stress tensor have to be zero so that a hydrostatic "
-                             "pressure is used.")
-
         if not timestep_ps > 0.0:
             raise ValueError("Timestep has to be larger than zero.")
 
         if not thermo_sampling_period > 0:
             raise ValueError("Number of timesteps between sampling in Lammps has to be bigger than zero.")
-
-        if not target_size > 0:
-            raise ValueError("Target size for supercell construction has to be bigger than zero.")
 
         if repeat is not None:
             if not len(repeat) == 3:
@@ -194,8 +180,8 @@ class TestDriver(SingleCrystalTestDriver):
             raise ValueError("The minimum number of samples to use for convergence checks in run-length control has to "
                              "be bigger than zero.")
 
-        # Get pressure from cauchy stress tensor.
-        pressure_bar = -cell_cauchy_stress_bar[0]
+        # Get pressure
+        pressure_bar = self._get_pressure(unit='bars', enforce_hydrostatic=True)
 
         # Create atoms object that will contain the supercell.
         atoms_new = self._get_atoms()
