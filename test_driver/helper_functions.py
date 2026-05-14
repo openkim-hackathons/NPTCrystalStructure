@@ -73,8 +73,8 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
         file, and melted crystal dump file (only exists if crystal melted).
     :rtype: Tuple[str, str, str, str, str]
     """
-    pdamp = timestep_ps * 100.0
-    tdamp = timestep_ps * 1000.0
+    pdamp = timestep_ps * 1000.0
+    tdamp = timestep_ps * 100.0
 
     # Lammps will be run directly in output_dir so all paths are with respect to that directory.
     log_filename = "lammps.log"
