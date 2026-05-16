@@ -22,7 +22,7 @@ class TestDriver(SingleCrystalTestDriver):
         random_seed: int = 1,
         rlc_n_every: int = 10,
         rlc_initial_run_length: int = 10000,
-        rlc_min_samples: int = 100,
+        rlc_min_samples: int = 400,
         output_dir: str = "output",
         equilibration_plots: bool = True,
         **kwargs) -> None:
