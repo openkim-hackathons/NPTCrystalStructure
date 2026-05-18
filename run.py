@@ -1,9 +1,19 @@
-import argparse
-import subprocess
-from kim_tools.test_driver.core import query_crystal_structures
 from test_driver.test_driver import TestDriver
+from ase.build import bulk
+
+atoms = bulk("Al")
+td=TestDriver("EAM_Dynamo_ErcolessiAdams_1994_Al__MO_123629422045_006")
+print(td(
+        atoms,
+        temperature_K=300,
+        target_size=500,
+        lammps_command= "lmp",
+))
 
 
+
+
+"""
 if __name__ == '__main__':
     # Argument parsing
     parser = argparse.ArgumentParser(description='Pass arguments to the KIM test driver')
@@ -35,3 +45,4 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Got exception {repr(e)}")
     test_driver.write_property_instances_to_file()
+"""
