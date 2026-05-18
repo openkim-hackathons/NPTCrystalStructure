@@ -8,7 +8,7 @@ This test driver repeats the unit cell to build a supercell and then runs a mole
 NPT ensemble using Lammps.
 
 This test driver uses kim-convergence to detect an equilibrated molecular-dynamics simulation. It checks
-convergence of the volume, temperature, enthalpy and cell shape parameters every 10000 timesteps.
+convergence of the volume, temperature, enthalpy and cell shape parameters every 10000 timesteps (default).
 
 During the equilibrated part of the simulation, the test driver averages the cell parameters and atomic positions to
 obtain the equilibrium crystal structure. This includes an average over time, and an average over the replicated unit
