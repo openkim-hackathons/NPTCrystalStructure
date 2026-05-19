@@ -110,7 +110,13 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
             + f" -log {log_filename}"
             + f" -in {os.path.join(output_dir, 'npt.lammps')}")
 
-    subprocess.run(command, check=True, shell=True)
+    patched_env = os.environ.copy()
+    if "PYTHONPATH" in  patched_env:
+        patched_env["PYTHONPATH"] = f"{output_dir}{os.pathsep}{patched_env['PYTHONPATH']}"
+    else:
+        patched_env["PYTHONPATH"] = output_dir
+
+    subprocess.run(command, check=True, shell=True, env=patched_env)
 
     if equilibration_plots:
         plot_property_from_lammps_log(f"{output_dir}/{log_filename}",
