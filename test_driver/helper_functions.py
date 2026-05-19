@@ -76,12 +76,11 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
     pdamp = timestep_ps * 1000.0
     tdamp = timestep_ps * 100.0
 
-    # Lammps will be run directly in output_dir so all paths are with respect to that directory.
-    log_filename = "lammps.log"
-    restart_filename = "final_configuration.restart"
-    melted_crystal_filename = "melted_crystal.dump"
-    average_position_filename = "average_position.dump"
-    average_cell_filename = "average_cell.dump"
+    log_filename = os.path.join(output_dir, "lammps.log")
+    restart_filename = os.path.join(output_dir, "final_configuration.restart")
+    melted_crystal_filename = os.path.join(output_dir, "melted_crystal.dump")
+    average_position_filename = os.path.join(output_dir, "average_position.dump")
+    average_cell_filename = os.path.join(output_dir, "average_cell.dump")
     variables = {
         "modelname": modelname,
         "temperature": temperature_K,
@@ -92,12 +91,12 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
         "timestep": timestep_ps,
         "thermo_sampling_period": thermo_sampling_period,
         "species": " ".join(species),
-        "zero_temperature_crystal_filename": "zero_temperature_crystal.lmp",
+        "zero_temperature_crystal_filename": os.path.join(output_dir, "zero_temperature_crystal.lmp"),
         "average_position_filename": f"{average_position_filename}.*",
         "average_cell_filename": average_cell_filename,
         "write_restart_filename": restart_filename,
-        "trajectory_filename": "trajectory.lammpstrj",
-        "msd_trajectory_filename": "msd_trajectory.lammpstrj",
+        "trajectory_filename": os.path.join(output_dir, "trajectory.lammpstrj"),
+        "msd_trajectory_filename": os.path.join(output_dir, "msd_trajectory.lammpstrj"),
         "msd_threshold": msd_threshold_angstrom_squared_per_sampling_timesteps,
         "msd_timesteps": number_msd_timesteps,
         "rlc_run_length": rlc_run_length,
@@ -109,9 +108,9 @@ def run_lammps(modelname: str, temperature_K: float, pressure_bar: float, timest
             f"{lammps_command} "
             + " ".join(f"-var {key} '{item}'" for key, item in variables.items())
             + f" -log {log_filename}"
-            + f" -in npt.lammps")
+            + f" -in {os.path.join(output_dir, 'npt.lammps')}")
 
-    subprocess.run(command, check=True, shell=True, cwd=output_dir)
+    subprocess.run(command, check=True, shell=True)
 
     if equilibration_plots:
         plot_property_from_lammps_log(f"{output_dir}/{log_filename}",
